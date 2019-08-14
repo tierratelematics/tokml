@@ -79,6 +79,22 @@ test('tokml', function(t) {
         tt.end();
     });
 
+    test('extrude', function(tt) {
+        geq(tt, 'extrude', { extrude: true });
+        tt.end();
+    });
+
+    test('tessellate', function(tt) {
+        geq(tt, 'tessellate', { tessellate: false });
+        tt.end();
+    });
+
+    test('altitudeMode', function(tt) {
+        geq(tt, 'altitudeMode', { altitudeMode: 'absolute' });
+        geq(tt, 'altitudeMode_invalid', { altitudeMode: 'invalidValue' });
+        tt.end();
+    });
+
     test('simplestyle spec', function(tt) {
         var options = { simplestyle: true };
         

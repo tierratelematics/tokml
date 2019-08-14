@@ -10,7 +10,10 @@ module.exports = function tokml(geojson, options) {
         name: 'name',
         description: 'description',
         simplestyle: false,
-        timestamp: 'timestamp'
+        timestamp: 'timestamp',
+        altitudeMode: undefined,
+        extrude: undefined,
+        tessellate: undefined
     };
 
     return '<?xml version="1.0" encoding="UTF-8"?>' +
@@ -25,7 +28,7 @@ module.exports = function tokml(geojson, options) {
 function feature(options, styleHashesArray) {
     return function(_) {
         if (!_.properties || !geometry.valid(_.geometry)) return '';
-        var geometryString = geometry.any(_.geometry);
+        var geometryString = geometry.any(_.geometry, options);
         if (!geometryString) return '';
         
         var styleDefinition = '',
@@ -100,17 +103,42 @@ function timestamp(_, options) {
     return _[options.timestamp] ? tag('TimeStamp', tag('when', encode(_[options.timestamp]))) : '';
 }
 
+function extrude(options) {
+    if (options.extrude === undefined || options.extrude === null) {
+        return '';
+    }
+    return tag('extrude', options.extrude ? 1 : 0);
+}
+
+function tessellate(options) {
+    if (options.tessellate === undefined || options.tessellate === null) {
+        return '';
+    }
+    return tag('tessellate', options.tessellate ? 1 : 0);
+}
+
+function altitudeMode(options) {
+    if (!options.altitudeMode) {
+        return '';
+    }
+    if (!['clampToGround', 'relativeToGround', 'absolute'].includes(options.altitudeMode)) {
+        return '';
+    }
+    return tag('altitudeMode', options.altitudeMode);
+}
+
+
 // ## Geometry Types
 //
 // https://developers.google.com/kml/documentation/kmlreference#geometry
 var geometry = {
-    Point: function(_) {
-        return tag('Point', tag('coordinates', _.coordinates.join(',')));
+    Point: function(_, options) {
+        return tag('Point', extrude(options) + tessellate(options) + altitudeMode(options) + tag('coordinates', _.coordinates.join(',')));
     },
-    LineString: function(_) {
-        return tag('LineString', tag('coordinates', linearring(_.coordinates)));
+    LineString: function(_, options) {
+        return tag('LineString', extrude(options) + tessellate(options) + altitudeMode(options) + tag('coordinates', linearring(_.coordinates)));
     },
-    Polygon: function(_) {
+    Polygon: function(_, options) {
         if (!_.coordinates.length) return '';
         var outer = _.coordinates[0],
             inner = _.coordinates.slice(1),
@@ -120,37 +148,39 @@ var geometry = {
                 return tag('innerBoundaryIs',
                     tag('LinearRing', tag('coordinates', linearring(i))));
             }).join('');
-        return tag('Polygon', outerRing + innerRings);
+        return tag('Polygon', extrude(options) + tessellate(options) + altitudeMode(options) + outerRing + innerRings);
     },
-    MultiPoint: function(_) {
+    MultiPoint: function(_, options) {
         if (!_.coordinates.length) return '';
         return tag('MultiGeometry', _.coordinates.map(function(c) {
-            return geometry.Point({ coordinates: c });
+            return geometry.Point({ coordinates: c }, options);
         }).join(''));
     },
-    MultiPolygon: function(_) {
+    MultiPolygon: function(_, options) {
         if (!_.coordinates.length) return '';
         return tag('MultiGeometry', _.coordinates.map(function(c) {
-            return geometry.Polygon({ coordinates: c });
+            return geometry.Polygon({ coordinates: c }, options);
         }).join(''));
     },
-    MultiLineString: function(_) {
+    MultiLineString: function(_, options) {
         if (!_.coordinates.length) return '';
         return tag('MultiGeometry', _.coordinates.map(function(c) {
-            return geometry.LineString({ coordinates: c });
+            return geometry.LineString({ coordinates: c }, options);
         }).join(''));
     },
-    GeometryCollection: function(_) {
+    GeometryCollection: function(_, options) {
         return tag('MultiGeometry',
-            _.geometries.map(geometry.any).join(''));
+            _.geometries.map(function(g) {
+                return geometry.any(g, options);
+            }).join(''));
     },
     valid: function(_) {
         return _ && _.type && (_.coordinates ||
             _.type === 'GeometryCollection' && _.geometries && _.geometries.every(geometry.valid));
     },
-    any: function(_) {
+    any: function(_, options) {
         if (geometry[_.type]) {
-            return geometry[_.type](_);
+            return geometry[_.type](_, options);
         } else {
             return '';
         }
